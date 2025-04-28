@@ -1,12 +1,8 @@
-"""
-rp_handler.py for runpod worker
-
-rp_debugger:
-- Utility that provides additional debugging information.
-The handler must be called with --rp_debugger flag to enable it.
-"""
+# rp_handler.py
 import base64
 import tempfile
+import subprocess
+import os
 
 from rp_schema import INPUT_VALIDATIONS
 from runpod.serverless.utils import download_files_from_urls, rp_cleanup, rp_debugger
@@ -14,43 +10,37 @@ from runpod.serverless.utils.rp_validator import validate
 import runpod
 import predict
 
-
 MODEL = predict.Predictor()
 MODEL.setup()
-
 
 def base64_to_tempfile(base64_file: str) -> str:
     '''
     Convert base64 file to tempfile.
-
-    Parameters:
-    base64_file (str): Base64 file
-
-    Returns:
-    str: Path to tempfile
     '''
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
         temp_file.write(base64.b64decode(base64_file))
-
     return temp_file.name
 
+def download_youtube_audio(job_id: str, youtube_url: str) -> str:
+    '''
+    Download YouTube audio using yt-dlp and return the local file path.
+    '''
+    output_path = f"/tmp/{job_id}.mp3"
+    subprocess.run([
+        "yt-dlp", "-x", "--audio-format", "mp3",
+        "-o", output_path, youtube_url
+    ], check=True)
+    return output_path
 
 @rp_debugger.FunctionTimer
 def run_whisper_job(job):
     '''
     Run inference on the model.
-
-    Parameters:
-    job (dict): Input job containing the model parameters
-
-    Returns:
-    dict: The result of the prediction
     '''
     job_input = job['input']
 
     with rp_debugger.LineTimer('validation_step'):
         input_validation = validate(job_input, INPUT_VALIDATIONS)
-
         if 'errors' in input_validation:
             return {"error": input_validation['errors']}
         job_input = input_validation['validated_input']
@@ -63,7 +53,11 @@ def run_whisper_job(job):
 
     if job_input.get('audio', False):
         with rp_debugger.LineTimer('download_step'):
-            audio_input = download_files_from_urls(job['id'], [job_input['audio']])[0]
+            audio_url = job_input['audio']
+            if "youtube.com" in audio_url or "youtu.be" in audio_url:
+                audio_input = download_youtube_audio(job['id'], audio_url)
+            else:
+                audio_input = download_files_from_urls(job['id'], [audio_url])[0]
 
     if job_input.get('audio_base64', False):
         audio_input = base64_to_tempfile(job_input['audio_base64'])
@@ -97,5 +91,5 @@ def run_whisper_job(job):
 
     return whisper_results
 
-
 runpod.serverless.start({"handler": run_whisper_job})
+
