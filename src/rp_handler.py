@@ -18,13 +18,24 @@ def base64_to_tempfile(base64_file: str) -> str:
         temp_file.write(base64.b64decode(base64_file))
     return temp_file.name
 
-def download_youtube_audio(job_id: str, url: str) -> str:
+def download_youtube_audio(job_id: str, url: str, cookies_txt: str = None) -> str:
     output_path = f"/tmp/{job_id}.%(ext)s"
+    cookies_path = None
+
     try:
-        subprocess.run([
+        if cookies_txt:
+            cookies_path = f"/tmp/{job_id}_cookies.txt"
+            with open(cookies_path, "w") as f:
+                f.write(cookies_txt)
+
+        cmd = [
             "yt-dlp", "-x", "--audio-format", "wav",
             "-o", output_path, url
-        ], capture_output=True, text=True, check=True)
+        ]
+        if cookies_path:
+            cmd.extend(["--cookies", cookies_path])
+
+        subprocess.run(cmd, capture_output=True, text=True, check=True)
 
         output_path_final = f"/tmp/{job_id}.wav"
         if not os.path.exists(output_path_final) or os.path.getsize(output_path_final) < 1024:
@@ -42,7 +53,6 @@ def download_vimeo_audio(job_id: str, url: str) -> str:
         temp_mp4 = f"/tmp/{job_id}.mp4"
         stream.download(download_directory="/tmp", filename=f"{job_id}.mp4")
 
-        # 轉成 wav
         temp_wav = f"/tmp/{job_id}.wav"
         subprocess.run([
             "ffmpeg", "-i", temp_mp4, "-vn", "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2", temp_wav
@@ -76,8 +86,10 @@ def run_whisper_job(job):
         if job_input.get('audio', False):
             with rp_debugger.LineTimer('download_step'):
                 audio_url = job_input['audio']
+                youtube_cookies = job_input.get("youtube_cookies")  # ⬅️ 新增支援
+
                 if "youtube.com" in audio_url or "youtu.be" in audio_url:
-                    audio_input = download_youtube_audio(job['id'], audio_url)
+                    audio_input = download_youtube_audio(job['id'], audio_url, youtube_cookies)
                 elif "vimeo.com" in audio_url:
                     audio_input = download_vimeo_audio(job['id'], audio_url)
                 else:
