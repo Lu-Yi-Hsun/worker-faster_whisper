@@ -28,10 +28,14 @@ def download_youtube_audio(job_id: str, url: str, cookies_txt: str = None) -> st
             with open(cookies_path, "w") as f:
                 f.write(cookies_txt)
 
+   
+
         cmd = [
-            "yt-dlp", "-x", "--audio-format", "wav",
+        "yt-dlp", "-x", "--audio-format", "mp3",
+            "--audio-quality", "5",  # 128~160kbps
             "-o", output_path, url
         ]
+
         if cookies_path:
             cmd.extend(["--cookies", cookies_path])
 
