@@ -31,8 +31,7 @@ def download_youtube_audio(job_id: str, url: str, cookies_txt: str = None) -> st
    
 
         cmd = [
-        "yt-dlp", "-x", "--audio-format", "mp3",
-            "--audio-quality", "5",  # 128~160kbps
+            "yt-dlp", "-x", "--audio-format", "wav",
             "-o", output_path, url
         ]
 
